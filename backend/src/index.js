@@ -5,10 +5,17 @@ import { load } from 'cheerio'
 import puppeteer from 'puppeteer'
 import tls from 'tls'
 import { URL as NodeURL } from 'url'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// Static Frontend (in Produktion)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const staticDir = process.env.STATIC_DIR || path.join(__dirname, 'public')
+app.use(express.static(staticDir))
 
 const patterns = {
   trackers: [
