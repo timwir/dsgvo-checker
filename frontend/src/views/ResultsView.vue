@@ -26,10 +26,12 @@ type Result = {
     notes?: string[]
   }
   cookies?: { name: string; domain?: string; path?: string; expires?: number; session?: boolean }[]
-  tools?: { name: string; matches: string[] }[]
+  tools?: { name: string; matches: string[]; nonCompliant?: boolean }[]
   externalPixels?: string[]
   stats?: any
   fingerprint?: any
+  score: number
+  scoreBreakdown?: any
 }
 
 const route = useRoute()
