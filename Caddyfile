@@ -1,0 +1,14 @@
+# Caddy v2 Konfiguration
+{
+	# Optional: E-Mail für ACME
+	email you@example.com
+}
+
+# Ersetze example.com durch deine Domain
+example.com {
+	encode zstd gzip
+	@api path /api/*
+	reverse_proxy @api backend:5174
+	# Alles andere: statisches SPA aus dem Backend (liefert index.html als Fallback)
+	reverse_proxy backend:5174
+}

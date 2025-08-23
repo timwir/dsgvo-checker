@@ -165,11 +165,13 @@ function buildFindings(html) {
   return { categorized, indicators, tips, scripts, links, wp, score, scoreBreakdown }
 }
 
-app.get('/health', (_req, res) => {
+// Health
+app.get(['/health','/api/health'], (_req, res) => {
   res.json({ ok: true })
 })
 
-app.get('/scan', async (req, res) => {
+// Scan
+app.get(['/scan','/api/scan'], async (req, res) => {
   const target = String(req.query.url || '')
   if (!target || !/^https?:\/\//i.test(target)) {
     return res.status(400).json({ error: 'Bitte vollständige URL mit http(s) angeben.' })
@@ -317,7 +319,8 @@ app.get('/scan', async (req, res) => {
   }
 })
 
-app.get('/screenshot', async (req, res) => {
+// Screenshot
+app.get(['/screenshot','/api/screenshot'], async (req, res) => {
   const target = String(req.query.url || '')
   if (!target || !/^https?:\/\//i.test(target)) {
     return res.status(400).json({ error: 'Bitte vollständige URL mit http(s) angeben.' })
@@ -338,6 +341,15 @@ app.get('/screenshot', async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: 'Screenshot fehlgeschlagen', details: e?.message })
   }
+})
+
+// Static Files (bereits oben registriert) + SPA Fallback
+app.get('*', (req, res, next) => {
+  // API-Pfade nicht durch SPA abfangen
+  if (req.path.startsWith('/api')) return next()
+  // Wenn Datei vorhanden ist, wird sie bereits von express.static bedient
+  // Fallback auf index.html für Vue-Router
+  res.sendFile(path.join(staticDir, 'index.html'))
 })
 
 const port = process.env.PORT ? Number(process.env.PORT) : 5174
