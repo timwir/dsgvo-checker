@@ -53,7 +53,7 @@ const patterns = {
   ],
   externalFiles: [
     /https?:\/\/[^\s]+\.(js|css)/i,
-    /<link[^>]+href=\"https?:\/\//i,
+    /<link[^>]+href=\"https?:\/{2}\//i,
   ],
   consentHints: [
     /cookie(consent|banner|notice)/i,
@@ -343,12 +343,9 @@ app.get(['/screenshot','/api/screenshot'], async (req, res) => {
   }
 })
 
-// Static Files (bereits oben registriert) + SPA Fallback
-app.get('*', (req, res, next) => {
-  // API-Pfade nicht durch SPA abfangen
+// SPA-Fallback ohne Wildcard-Pattern (vermeidet path-to-regexp Fehler)
+app.use((req, res, next) => {
   if (req.path.startsWith('/api')) return next()
-  // Wenn Datei vorhanden ist, wird sie bereits von express.static bedient
-  // Fallback auf index.html für Vue-Router
   res.sendFile(path.join(staticDir, 'index.html'))
 })
 
