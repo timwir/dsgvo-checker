@@ -118,7 +118,9 @@ const actions = computed(() => {
     }
   }
 
-  list.push('Datenschutzerklärung aktualisieren (Zwecke, Rechtsgrundlagen, Empfänger, Speicherdauer, Rechte).')
+  if (!(r as any).privacy || !(r as any).privacy.present) {
+    list.push('Datenschutzerklärung aktualisieren (Zwecke, Rechtsgrundlagen, Empfänger, Speicherdauer, Rechte).')
+  }
   return list
 })
 
@@ -251,15 +253,15 @@ watch(() => route.query.url, (n) => {
           <div class="grid" style="margin-top:12px;">
             <div class="card">
               <h3 class="headline" style="font-size:18px;">Plugins</h3>
-              <ul>
-                <li v-for="(p, i) in (result!.wp?.plugins || [])" :key="i">{{ p }}</li>
-              </ul>
+              <div class="chip-list">
+                <span v-for="(p, i) in (result!.wp?.plugins || [])" :key="i" class="chip">{{ p }}</span>
+              </div>
             </div>
             <div class="card">
               <h3 class="headline" style="font-size:18px;">Themes</h3>
-              <ul>
-                <li v-for="(t, i) in (result!.wp?.themes || [])" :key="i">{{ t }}</li>
-              </ul>
+              <div class="chip-list">
+                <span v-for="(t, i) in (result!.wp?.themes || [])" :key="i" class="chip">{{ t }}</span>
+              </div>
             </div>
           </div>
           <div v-if="result!.wp?.notes?.length" class="card" style="margin-top:12px;">

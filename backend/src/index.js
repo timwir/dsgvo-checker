@@ -138,31 +138,13 @@ function buildFindings(html) {
 
   const wp = { isWordPress, version: wpVersion, plugins: wpPlugins, themes: wpThemes, notes: wpNotes }
 
-  // Score berechnen (heuristisch)
-  let score = 100
-  if (hasTracker) score -= 25
-  if (hasGoogle) score -= 20
-  if (hasCritical) score -= 20
-  if (hasExternal) score -= 10
-  if (hasConsent) score += 10
-  if (score < 0) score = 0
-  if (score > 100) score = 100
-
-  const scoreBreakdown = {
-    base: 100,
-    minusTrackers: hasTracker ? 25 : 0,
-    minusGoogle: hasGoogle ? 20 : 0,
-    minusCritical: hasCritical ? 20 : 0,
-    minusExternal: hasExternal ? 10 : 0,
-    plusConsent: hasConsent ? 10 : 0,
-  }
-
   // Ergänzende Handlungstipps für Einsteiger
   tips.push('Erstelle ein Verzeichnis von Verarbeitungstätigkeiten (Art. 30 DSGVO).')
   tips.push('Überprüfe Datenschutzerklärung: Zwecke, Rechtsgrundlagen, Empfänger, Speicherdauer, Betroffenenrechte.')
   if (!hasConsent) tips.push('Vor dem Laden nicht-notwendiger Dienste Einwilligung einholen; Buttons/Overlays entsprechend gestalten.')
 
-  return { categorized, indicators, tips, scripts, links, wp, score, scoreBreakdown }
+  // Wichtig: Score wird final im /scan-Handler anhand geladener Requests berechnet
+  return { categorized, indicators, tips, scripts, links, wp }
 }
 
 // Health
@@ -247,6 +229,61 @@ app.get(['/scan','/api/scan'], async (req, res) => {
 
     await browser.close()
 
+    // Consent- und Datenschutzerklärungs-Erkennung (gerenderte Seite)
+    let consentEval = { found: false, hasTcf: false }
+    let privacyEval = { present: false, url: null }
+    try {
+      consentEval = await (async () => {
+        const browser2 = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] })
+        const page2 = await browser2.newPage()
+        await page2.setViewport({ width: 1366, height: 900 })
+        await page2.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 })
+        const result = await page2.evaluate(() => {
+          const html = document.documentElement ? document.documentElement.innerHTML : ''
+          const hints = [
+            /__tcfapi|tcfapi/i,
+            /cookie(consent|banner|notice)/i,
+            /consent[-_]?manager/i,
+            /real[-_ ]?cookie[-_ ]?banner/i,
+            /borlabs[-_ ]?cookie/i,
+            /usercentrics/i,
+            /onetrust/i,
+            /cookieyes/i,
+            /complianz/i,
+          ]
+          const hasTcf = typeof (window).__tcfapi === 'function'
+          const found = hints.some((re) => re.test(html)) || hasTcf
+          return { found, hasTcf }
+        })
+        await browser2.close()
+        return result
+      })()
+    } catch {}
+
+    try {
+      const browser3 = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] })
+      const page3 = await browser3.newPage()
+      await page3.setViewport({ width: 1366, height: 900 })
+      await page3.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      privacyEval = await page3.evaluate(() => {
+        function findPrivacyLink() {
+          const anchors = Array.from(document.querySelectorAll('a[href]'))
+          const patterns = [/datenschutzerkl[aä]rung/i, /datenschutz/i, /privacy\s*policy/i]
+          for (const a of anchors) {
+            const text = (a.textContent || '').trim()
+            const href = (a.getAttribute('href') || '').trim()
+            if (patterns.some((re) => re.test(text)) || patterns.some((re) => re.test(href))) {
+              try { return new URL(href, location.origin).toString() } catch { return href }
+            }
+          }
+          return null
+        }
+        const url = findPrivacyLink()
+        return { present: !!url, url }
+      })
+      await browser3.close()
+    } catch {}
+
     // SSL-Infos
     async function getSSLInfo(u) {
       try {
@@ -294,6 +331,47 @@ app.get(['/scan','/api/scan'], async (req, res) => {
 
     const externalPixels = requestUrls.filter(u => /pixel|track|collect|g\.gif|\/generate_204/i.test(u)).slice(0, 30)
 
+    // Geladene-statt-nur-referenzierte Erkennung
+    const hasTrackerLoaded = requestUrls.some(u => patterns.trackers.some(re => re.test(u)))
+    const hasGoogleLoaded = requestUrls.some(u => patterns.googleTools.some(re => re.test(u)))
+    const hasCriticalLoaded = requestUrls.some(u => patterns.criticalTools.some(re => re.test(u)))
+    const externalScriptOrCssRequests = requests.filter(r => (r.type === 'script' || r.type === 'stylesheet') && /^https?:\/\//i.test(r.url))
+    const hasExternalLoaded = externalScriptOrCssRequests.some(r => !r.url.startsWith(origin))
+
+    const categorized = {
+      trackingCookies: hasTrackerLoaded,
+      trackers: hasTrackerLoaded,
+      googleTools: hasGoogleLoaded,
+      criticalTools: hasCriticalLoaded,
+      externalFiles: hasExternalLoaded,
+      consentPresent: baseFindings.categorized.consentPresent || consentEval.found,
+    }
+
+    // Score basierend auf geladenen Requests berechnen
+    let score = 100
+    if (categorized.trackers) score -= 25
+    if (categorized.googleTools) score -= 20
+    if (categorized.criticalTools) score -= 20
+    if (categorized.externalFiles) score -= 10
+    if (categorized.consentPresent) score += 10
+    if (score < 0) score = 0
+    if (score > 100) score = 100
+
+    const scoreBreakdown = {
+      base: 100,
+      minusTrackers: categorized.trackers ? 25 : 0,
+      minusGoogle: categorized.googleTools ? 20 : 0,
+      minusCritical: categorized.criticalTools ? 20 : 0,
+      minusExternal: categorized.externalFiles ? 10 : 0,
+      plusConsent: categorized.consentPresent ? 10 : 0,
+    }
+
+    // Handlungstipps bereinigen: Datenschutzhinweis nur, wenn nicht gefunden
+    const tips = baseFindings.tips.filter(t => !/Datenschutzerklärung/i.test(t))
+    if (!privacyEval.present) {
+      tips.push('Überprüfe Datenschutzerklärung: Zwecke, Rechtsgrundlagen, Empfänger, Speicherdauer, Betroffenenrechte.')
+    }
+
     const stats = {
       ssl,
       pagesScanned: 1 + crawledPages.length,
@@ -307,12 +385,20 @@ app.get(['/scan','/api/scan'], async (req, res) => {
 
     res.json({
       url: target,
-      ...baseFindings,
+      indicators: baseFindings.indicators,
+      scripts: baseFindings.scripts,
+      links: baseFindings.links,
+      wp: baseFindings.wp,
+      categorized,
+      tips,
+      score,
+      scoreBreakdown,
       cookies: pageCookies.map(c => ({ name: c.name, domain: c.domain, path: c.path, expires: c.expires, session: c.session })),
       tools,
       externalPixels,
       stats,
       fingerprint: fp,
+      privacy: { present: privacyEval.present, url: privacyEval.url },
     })
   } catch (e) {
     res.status(500).json({ error: 'Scan fehlgeschlagen', details: e?.message })
