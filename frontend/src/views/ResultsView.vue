@@ -59,10 +59,11 @@ async function scan() {
     error.value = 'Bitte eine vollständige URL eingeben (inkl. https://)'
     return
   }
+  let timeoutId: number | undefined
   try {
     loading.value = true
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    timeoutId = window.setTimeout(() => controller.abort(), 60000)
     const res = await fetch(`/api/scan?url=${encodeURIComponent(url.value)}`, { signal: controller.signal })
     const text = await res.text()
     let data: any
@@ -80,7 +81,7 @@ async function scan() {
   } catch (e: any) {
     error.value = e?.name === 'AbortError' ? 'Zeitüberschreitung beim Scan' : (e?.message || 'Scan fehlgeschlagen')
   } finally {
-    try { clearTimeout(timeoutId as any) } catch {}
+    try { if (timeoutId !== undefined) clearTimeout(timeoutId) } catch {}
     loading.value = false
   }
 }
