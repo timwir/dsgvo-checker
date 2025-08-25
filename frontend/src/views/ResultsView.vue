@@ -61,7 +61,9 @@ async function scan() {
   }
   try {
     loading.value = true
-    const res = await fetch(`/api/scan?url=${encodeURIComponent(url.value)}`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const res = await fetch(`/api/scan?url=${encodeURIComponent(url.value)}`, { signal: controller.signal })
     const text = await res.text()
     let data: any
     try { data = JSON.parse(text) } catch { throw new Error('Unerwartete Antwort vom Server (kein JSON)') }
@@ -76,8 +78,9 @@ async function scan() {
     img.onerror = () => { screenshotSrc.value = src; screenshotLoading.value = false }
     img.src = src
   } catch (e: any) {
-    error.value = e?.message || 'Scan fehlgeschlagen'
+    error.value = e?.name === 'AbortError' ? 'Zeitüberschreitung beim Scan' : (e?.message || 'Scan fehlgeschlagen')
   } finally {
+    try { clearTimeout(timeoutId as any) } catch {}
     loading.value = false
   }
 }
