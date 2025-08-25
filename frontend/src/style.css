@@ -81,6 +81,7 @@ button:focus, button:focus-visible { outline: 3px solid rgba(11, 210, 129, .6); 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot.ok { background: #3bd37a; }
 .dot.warn { background: #ffb86b; }
+.dot.note { background: #ffd84d; }
 
 .screenshot { width: 100%; aspect-ratio: 16/9; border-radius: 12px; border: 1px solid #1e252b; background: #0e1317; object-fit: cover; }
 :root[data-theme="light"] .screenshot { background: #f3f6f8; border-color: #e6ebf0; }

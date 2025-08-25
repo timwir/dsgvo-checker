@@ -350,7 +350,8 @@ app.get(['/scan','/api/scan'], async (req, res) => {
     // Score basierend auf geladenen Requests berechnen
     let score = 100
     if (categorized.trackers) score -= 25
-    if (categorized.googleTools) score -= 20
+    // Google-Tools sind neutral: keine Abwertung
+    // if (categorized.googleTools) score -= 20
     if (categorized.criticalTools) score -= 20
     if (categorized.externalFiles) score -= 10
     if (categorized.consentPresent) score += 10
@@ -360,9 +361,11 @@ app.get(['/scan','/api/scan'], async (req, res) => {
     const scoreBreakdown = {
       base: 100,
       minusTrackers: categorized.trackers ? 25 : 0,
-      minusGoogle: categorized.googleTools ? 20 : 0,
+      // Google-Tools neutral, keine Abwertung
+      minusGoogle: 0,
       minusCritical: categorized.criticalTools ? 20 : 0,
-      minusExternal: categorized.externalFiles ? 10 : 0,
+      // Externe Dateien neutral, keine Abwertung
+      minusExternal: 0,
       plusConsent: categorized.consentPresent ? 10 : 0,
     }
 

@@ -61,7 +61,9 @@ async function scan() {
   }
   try {
     loading.value = true
-    const res = await fetch(`/api/scan?url=${encodeURIComponent(url.value)}`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const res = await fetch(`/api/scan?url=${encodeURIComponent(url.value)}`, { signal: controller.signal })
     const text = await res.text()
     let data: any
     try { data = JSON.parse(text) } catch { throw new Error('Unerwartete Antwort vom Server (kein JSON)') }
@@ -76,8 +78,9 @@ async function scan() {
     img.onerror = () => { screenshotSrc.value = src; screenshotLoading.value = false }
     img.src = src
   } catch (e: any) {
-    error.value = e?.message || 'Scan fehlgeschlagen'
+    error.value = e?.name === 'AbortError' ? 'Zeitüberschreitung beim Scan' : (e?.message || 'Scan fehlgeschlagen')
   } finally {
+    try { clearTimeout(timeoutId as any) } catch {}
     loading.value = false
   }
 }
@@ -207,9 +210,9 @@ watch(() => route.query.url, (n) => {
         <div class="badges">
           <div class="badge" title="Tracking‑Cookies ohne Einwilligung könnten gesetzt werden."><span class="dot" :class="result!.categorized.trackingCookies ? 'warn' : 'ok'"></span> Tracking‑Cookies: {{ result!.categorized.trackingCookies ? 'Auffällig' : 'OK' }}</div>
           <div class="badge" title="Tracker dürfen erst nach Einwilligung laden."><span class="dot" :class="result!.categorized.trackers ? 'warn' : 'ok'"></span> Tracker: {{ result!.categorized.trackers ? 'Auffällig' : 'OK' }}</div>
-          <div class="badge" title="Google‑Dienste erfordern i. d. R. Einwilligung und Drittländer‑Check."><span class="dot" :class="result!.categorized.googleTools ? 'warn' : 'ok'"></span> Google‑Tools: {{ result!.categorized.googleTools ? 'Gefunden' : 'OK' }}</div>
+          <div class="badge" title="Google‑Dienste sind verbreitet; Rechtskonformität und Consent prüfen."><span class="dot" :class="result!.categorized.googleTools ? 'note' : 'ok'"></span> Google‑Tools: {{ result!.categorized.googleTools ? 'Gefunden' : 'OK' }} <span v-if="result!.categorized.googleTools" class="muted" style="font-size:12px;">(neutral)</span></div>
           <div class="badge" title="Kritische Tools: Verträge/DSA/AV prüfen."><span class="dot" :class="result!.categorized.criticalTools ? 'warn' : 'ok'"></span> Kritische Tools: {{ result!.categorized.criticalTools ? 'Gefunden' : 'OK' }}</div>
-          <div class="badge" title="Externe Ressourcen sind nicht per se schlecht, aber Quelle/SRI prüfen."><span class="dot" :class="result!.categorized.externalFiles ? 'warn' : 'ok'"></span> Externe Dateien: {{ result!.categorized.externalFiles ? 'Vorhanden' : 'Keine' }}</div>
+          <div class="badge" title="Externe Ressourcen sind nicht per se schlecht; Quelle, SRI und CSP prüfen."><span class="dot" :class="result!.categorized.externalFiles ? 'note' : 'ok'"></span> Externe Dateien: {{ result!.categorized.externalFiles ? 'Vorhanden' : 'Keine' }} <span v-if="result!.categorized.externalFiles" class="muted" style="font-size:12px;">(neutral)</span></div>
           <div class="badge" title="Consent‑Banner/CMP notwendig, bevor nicht‑notwendige Dienste laden."><span class="dot" :class="result!.categorized.consentPresent ? 'ok' : 'warn'"></span> Consent‑Manager: {{ result!.categorized.consentPresent ? 'Erkannt' : 'Fehlt' }}</div>
         </div>
       </div>
